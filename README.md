@@ -1,8 +1,24 @@
+```text
+╔════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                      Latest Version v1.0                                       ║
+╠════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                ║
+║   ███╗   ███╗ ██████╗██████╗     ███████╗ █████╗  ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗   ║
+║   ████╗ ████║██╔════╝██╔══██╗    ██╔════╝██╔══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝   ║
+║   ██╔████╔██║██║     ██████╔╝    █████╗  ███████║██║        ██║   ██║   ██║██████╔╝ ╚████╔╝    ║
+║   ██║╚██╔╝██║██║     ██╔═══╝     ██╔══╝  ██╔══██║██║        ██║   ██║   ██║██╔══██╗  ╚██╔╝     ║
+║   ██║ ╚═╝ ██║╚██████╗██║         ██║     ██║  ██║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║      ║
+║   ╚═╝     ╚═╝ ╚═════╝╚═╝         ╚═╝     ╚═╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝      ║
+║                                                                                                ║
+║   ┌────────────────────────────────────────────────────────────────────────────────────────┐   ║
+║   │   > SELECT CARTRIDGE : [1] REST API   [2] GRAPHQL   [3] PYTHON PLUGIN   [4] OPENAPI    │   ║
+║   │   > SELECT TRANSPORT : [A] CLOUD RUN HTTP/SSE       [B] LOCAL STDIO     [C] BRIDGE     │   ║
+║   │   > STATUS           : READY! INSERT `mcp_config.json` TO SPAWN SERVER...              │   ║
+║   └────────────────────────────────────────────────────────────────────────────────────────┘   ║
+╚════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
 <div align="center">
-
-<img src="assets/retro_banner.svg" alt="MCPFactory Retro Arcade Banner" width="100%" />
-
-<br/>
 
 [![MCP Protocol](https://img.shields.io/badge/PROTOCOL-MCP_2025-00f5d4?style=for-the-badge&logo=ai&logoColor=black)](#)
 [![Python 3.10+](https://img.shields.io/badge/PYTHON-3.10%2B-ffbe0b?style=for-the-badge&logo=python&logoColor=black)](#)
@@ -10,31 +26,11 @@
 [![OpenAPI Auto-Import](https://img.shields.io/badge/CARTRIDGE-OPENAPI_3.X-8338ec?style=for-the-badge&logo=openapiinitiative&logoColor=white)](#-auto-generating-an-mcp-server-from-openapi--swagger)
 [![License: MIT](https://img.shields.io/badge/LICENSE-MIT-38b000?style=for-the-badge)](#-license--open-source-terms)
 
-</div>
-
-```text
-╔══════════════════════════════════════════════════════════════════════════════════════════╗
-║  🕹️  ARCADE OS v1.0   │  1UP: 099950  │  HI-SCORE: 999999  │  CREDITS: ∞  │  STAGE: GCP  ║
-╠══════════════════════════════════════════════════════════════════════════════════════════╣
-║                                                                                          ║
-║   ███╗   ███╗ ██████╗██████╗     ███████╗ █████╗  ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗
-║   ████╗ ████║██╔════╝██╔══██╗    ██╔════╝██╔══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝
-║   ██╔████╔██║██║     ██████╔╝    █████╗  ███████║██║        ██║   ██║   ██║██████╔╝ ╚████╔╝ 
-║   ██║╚██╔╝██║██║     ██╔═══╝     ██╔══╝  ██╔══██║██║        ██║   ██║   ██║██╔══██╗  ╚██╔╝  
-║   ██║ ╚═╝ ██║╚██████╗██║         ██║     ██║  ██║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║   
-║   ╚═╝     ╚═╝ ╚═════╝╚═╝         ╚═╝     ╚═╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
-║                                                                                          ║
-║   ┌──────────────────────────────────────────────────────────────────────────────────┐   ║
-║   │  > SELECT CARTRIDGE : [1] REST API  [2] GRAPHQL  [3] PYTHON PLUGIN  [4] OPENAPI  │   ║
-║   │  > SELECT TRANSPORT : [A] CLOUD RUN HTTP/SSE     [B] LOCAL STDIO    [C] BRIDGE   │   ║
-║   │  > STATUS           : READY! INSERT `mcp_config.json` TO SPAWN SERVER...         │   ║
-║   └──────────────────────────────────────────────────────────────────────────────────┘   ║
-╚══════════════════════════════════════════════════════════════════════════════════════════╝
-```
-
 # MCPFactory: Declarative JSON-Driven MCP Framework for Any Backend Service
 
 **MCPFactory** is a production-grade blueprint and runtime engine that makes creating **Model Context Protocol (MCP)** servers for any backend service—REST APIs, GraphQL endpoints, Google Cloud APIs (BigQuery, Cloud Run, Vertex AI), OpenAPI/Swagger specs, or custom Python logic—as simple as editing a single JSON file and deploying to **Google Cloud Run** with one command.
+
+</div>
 
 ---
 
@@ -109,8 +105,6 @@ flowchart LR
 
 ```text
 MCPFactory/
-├── assets/
-│   └── retro_banner.svg             # Animated 16-bit retro arcade SVG header
 ├── README.md                        # Quickstart, JSON Reference & Cloud Run Guide
 ├── explain.md                       # Deep-dive explanation of MCP concepts & code architecture
 ├── LICENSE                          # MIT Open-Source License
