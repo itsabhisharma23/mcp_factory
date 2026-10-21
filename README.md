@@ -1,3 +1,37 @@
+<div align="center">
+
+<img src="assets/retro_banner.svg" alt="MCPFactory Retro Arcade Banner" width="100%" />
+
+<br/>
+
+[![MCP Protocol](https://img.shields.io/badge/PROTOCOL-MCP_2025-00f5d4?style=for-the-badge&logo=ai&logoColor=black)](#)
+[![Python 3.10+](https://img.shields.io/badge/PYTHON-3.10%2B-ffbe0b?style=for-the-badge&logo=python&logoColor=black)](#)
+[![Cloud Run Ready](https://img.shields.io/badge/DEPLOY-GOOGLE_CLOUD_RUN-ff006e?style=for-the-badge&logo=googlecloud&logoColor=white)](#-deploying-to-google-cloud-run)
+[![OpenAPI Auto-Import](https://img.shields.io/badge/CARTRIDGE-OPENAPI_3.X-8338ec?style=for-the-badge&logo=openapiinitiative&logoColor=white)](#-auto-generating-an-mcp-server-from-openapi--swagger)
+[![License: MIT](https://img.shields.io/badge/LICENSE-MIT-38b000?style=for-the-badge)](#-license--open-source-terms)
+
+</div>
+
+```text
+╔══════════════════════════════════════════════════════════════════════════════════════════╗
+║  🕹️  ARCADE OS v1.0   │  1UP: 099950  │  HI-SCORE: 999999  │  CREDITS: ∞  │  STAGE: GCP  ║
+╠══════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                          ║
+║   ███╗   ███╗ ██████╗██████╗     ███████╗ █████╗  ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗
+║   ████╗ ████║██╔════╝██╔══██╗    ██╔════╝██╔══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝
+║   ██╔████╔██║██║     ██████╔╝    █████╗  ███████║██║        ██║   ██║   ██║██████╔╝ ╚████╔╝ 
+║   ██║╚██╔╝██║██║     ██╔═══╝     ██╔══╝  ██╔══██║██║        ██║   ██║   ██║██╔══██╗  ╚██╔╝  
+║   ██║ ╚═╝ ██║╚██████╗██║         ██║     ██║  ██║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║   
+║   ╚═╝     ╚═╝ ╚═════╝╚═╝         ╚═╝     ╚═╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
+║                                                                                          ║
+║   ┌──────────────────────────────────────────────────────────────────────────────────┐   ║
+║   │  > SELECT CARTRIDGE : [1] REST API  [2] GRAPHQL  [3] PYTHON PLUGIN  [4] OPENAPI  │   ║
+║   │  > SELECT TRANSPORT : [A] CLOUD RUN HTTP/SSE     [B] LOCAL STDIO    [C] BRIDGE   │   ║
+║   │  > STATUS           : READY! INSERT `mcp_config.json` TO SPAWN SERVER...         │   ║
+║   └──────────────────────────────────────────────────────────────────────────────────┘   ║
+╚══════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
 # MCPFactory: Declarative JSON-Driven MCP Framework for Any Backend Service
 
 **MCPFactory** is a production-grade blueprint and runtime engine that makes creating **Model Context Protocol (MCP)** servers for any backend service—REST APIs, GraphQL endpoints, Google Cloud APIs (BigQuery, Cloud Run, Vertex AI), OpenAPI/Swagger specs, or custom Python logic—as simple as editing a single JSON file and deploying to **Google Cloud Run** with one command.
@@ -75,8 +109,11 @@ flowchart LR
 
 ```text
 MCPFactory/
+├── assets/
+│   └── retro_banner.svg             # Animated 16-bit retro arcade SVG header
 ├── README.md                        # Quickstart, JSON Reference & Cloud Run Guide
 ├── explain.md                       # Deep-dive explanation of MCP concepts & code architecture
+├── LICENSE                          # MIT Open-Source License
 ├── pyproject.toml                   # Package configuration & `mcp-factory` CLI entrypoint
 ├── requirements.txt                 # Python dependencies
 ├── Dockerfile                       # Production non-root container image for Cloud Run
@@ -371,3 +408,21 @@ python3 -m unittest discover -s tests -v
 ## 📖 Deep-Dive Architectural & Code Walkthrough
 
 See **[explain.md](./explain.md)** for a comprehensive explanation of all Model Context Protocol concepts, transport internals (`stdio` vs. `SSE` vs. `Streamable HTTP`), dynamic schema compilation, and a module-by-module walkthrough of the codebase.
+
+---
+
+## 📜 License & Open-Source Terms
+
+This project is licensed under the **MIT License** — see the **[LICENSE](./LICENSE)** file for full legal text.
+
+| Permissions | Conditions | Limitations |
+| :--- | :--- | :--- |
+| ✅ **Commercial Use**: Use MCPFactory in commercial products and enterprise Cloud Run deployments | ℹ️ **License & Copyright Notice**: Include the original copyright and license notice in copies of the software | ❌ **No Liability**: Software is provided "AS IS" without warranty of any kind |
+| ✅ **Modification**: Customize connectors, schemas, and plugins freely | | ❌ **No Warranty**: Authors are not liable for any claim or damages |
+| ✅ **Distribution**: Distribute original or modified versions | | |
+| ✅ **Private Use**: Use internally across private repositories and infrastructure | | |
+
+```text
+MIT License — Copyright (c) 2026 Abhi Sharma
+```
+
