@@ -1,0 +1,64 @@
+# ============================================================================
+# Google Cloud Build CI/CD Pipeline for MCPFactory -> Cloud Run
+# ============================================================================
+# Trigger manually or via GitHub push:
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_SERVICE_NAME=ecommerce-mcp,_MCP_CONFIG_PATH=configs/ecommerce_service.json
+# ============================================================================
+
+substitutions:
+  _SERVICE_NAME: "ecommerce-unified-mcp"
+  _REGION: "us-central1"
+  _MCP_CONFIG_PATH: "configs/ecommerce_service.json"
+  _AR_REPO: "mcp-factory-repo"
+
+steps:
+  # Step 1: Validate all JSON blueprints & run unit tests
+  - name: "python:3.11-slim"
+    id: "validate-and-test"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        pip install --no-cache-dir -r requirements.txt && pip install --no-deps -e .
+        python -m mcp_factory.cli validate ${_MCP_CONFIG_PATH}
+        pytest -v
+
+  # Step 2: Build the container image
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-image"
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:$COMMIT_SHA"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:latest"
+      - "."
+
+  # Step 3: Push container image to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push-image"
+    args:
+      - "push"
+      - "--all-tags"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}"
+
+  # Step 4: Deploy to Google Cloud Run with session affinity & SSE timeout
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "deploy-cloud-run"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "${_SERVICE_NAME}"
+      - "--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:$COMMIT_SHA"
+      - "--region=${_REGION}"
+      - "--platform=managed"
+      - "--session-affinity"
+      - "--timeout=3600"
+      - "--set-env-vars=MCP_CONFIG_PATH=${_MCP_CONFIG_PATH},MCP_TRANSPORT=http"
+      - "--allow-unauthenticated"
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:$COMMIT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:latest"

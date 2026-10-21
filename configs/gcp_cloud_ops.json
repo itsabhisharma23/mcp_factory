@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0",
+  "server": {
+    "name": "gcp-backend-bridge-mcp",
+    "version": "1.0.0",
+    "description": "Declarative MCP Server bridging Google Cloud APIs (BigQuery) and private Cloud Run microservices using native GCP IAM / OIDC authentication.",
+    "instructions": "Use these tools to query BigQuery datasets or invoke internal Cloud Run microservices securely using the Cloud Run service account."
+  },
+  "backends": {
+    "bigquery_api": {
+      "type": "rest",
+      "base_url": "https://bigquery.googleapis.com/bigquery/v2",
+      "timeout_seconds": 60.0,
+      "max_retries": 2,
+      "auth": {
+        "type": "gcp_access_token",
+        "scopes": ["https://www.googleapis.com/auth/bigquery.readonly"]
+      }
+    },
+    "internal_cloud_run_service": {
+      "type": "rest",
+      "base_url": "${INTERNAL_SERVICE_URL:-https://internal-billing-api-uc.a.run.app}",
+      "timeout_seconds": 30.0,
+      "max_retries": 2,
+      "auth": {
+        "type": "gcp_id_token",
+        "audience": "${INTERNAL_SERVICE_URL:-https://internal-billing-api-uc.a.run.app}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "list_bigquery_datasets",
+      "description": "Lists all BigQuery datasets in a specified Google Cloud project.",
+      "backend": "bigquery_api",
+      "method": "GET",
+      "endpoint": "/projects/{project_id}/datasets",
+      "parameters": {
+        "project_id": {
+          "type": "string",
+          "description": "Google Cloud Project ID",
+          "required": true,
+          "location": "path"
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": "Maximum number of datasets to return",
+          "required": false,
+          "default": 25,
+          "location": "query"
+        }
+      },
+      "response": {
+        "extract_path": "datasets",
+        "pick_fields": ["id", "datasetReference", "location"]
+      }
+    },
+    {
+      "name": "run_bigquery_sql",
+      "description": "Executes a read-only Standard SQL query against Google BigQuery and returns the resulting rows.",
+      "backend": "bigquery_api",
+      "method": "POST",
+      "endpoint": "/projects/{project_id}/queries",
+      "static_body": {
+        "useLegacySql": false,
+        "timeoutMs": 30000
+      },
+      "parameters": {
+        "project_id": {
+          "type": "string",
+          "description": "Google Cloud Project ID",
+          "required": true,
+          "location": "path"
+        },
+        "query": {
+          "type": "string",
+          "description": "Standard SQL SELECT statement to execute",
+          "required": true,
+          "location": "body"
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": "Max rows to return",
+          "required": false,
+          "default": 50,
+          "location": "body"
+        }
+      },
+      "response": {
+        "pick_fields": ["jobReference", "schema", "rows", "totalRows", "jobComplete"]
+      }
+    },
+    {
+      "name": "trigger_internal_reconciliation",
+      "description": "Calls a private IAM-protected Cloud Run microservice using an automatic OIDC ID token.",
+      "backend": "internal_cloud_run_service",
+      "method": "POST",
+      "endpoint": "/v1/reconcile/{account_id}",
+      "parameters": {
+        "account_id": {
+          "type": "string",
+          "description": "Enterprise account ID to reconcile",
+          "required": true,
+          "location": "path"
+        },
+        "billing_month": {
+          "type": "string",
+          "description": "Billing period in YYYY-MM format",
+          "required": true,
+          "location": "body"
+        }
+      }
+    }
+  ],
+  "resources": [],
+  "prompts": []
+}

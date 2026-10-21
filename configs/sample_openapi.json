@@ -1,0 +1,129 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Acme Payments & Invoicing API",
+    "version": "2.1.0",
+    "description": "REST backend for managing customer invoices, refunds, and payment methods."
+  },
+  "servers": [
+    {
+      "url": "https://payments.acme.internal/v2"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "paths": {
+    "/invoices": {
+      "get": {
+        "operationId": "list_invoices",
+        "summary": "List customer invoices with optional status filter",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "query",
+            "required": true,
+            "description": "Customer account identifier",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by invoice status",
+            "schema": {
+              "type": "string",
+              "enum": ["draft", "open", "paid", "void"],
+              "default": "open"
+            }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Invoice list" }
+        }
+      },
+      "post": {
+        "operationId": "create_invoice",
+        "summary": "Create and issue a new invoice for a customer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["customer_id", "amount_cents", "currency"],
+                "properties": {
+                  "customer_id": {
+                    "type": "string",
+                    "description": "Customer account ID"
+                  },
+                  "amount_cents": {
+                    "type": "integer",
+                    "description": "Total amount in cents (e.g. 4999 for $49.99)"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "3-letter ISO currency code",
+                    "default": "USD"
+                  },
+                  "memo": {
+                    "type": "string",
+                    "description": "Optional note visible on the invoice"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created invoice" }
+        }
+      }
+    },
+    "/invoices/{invoice_id}/refund": {
+      "post": {
+        "operationId": "refund_invoice",
+        "summary": "Issue a full or partial refund for a paid invoice",
+        "parameters": [
+          {
+            "name": "invoice_id",
+            "in": "path",
+            "required": true,
+            "description": "Unique ID of the invoice to refund",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reason"],
+                "properties": {
+                  "amount_cents": {
+                    "type": "integer",
+                    "description": "Refund amount in cents (omit for full refund)"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "Reason for refund",
+                    "enum": ["duplicate", "fraudulent", "requested_by_customer"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Refund processed" }
+        }
+      }
+    }
+  }
+}

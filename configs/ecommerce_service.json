@@ -1,0 +1,273 @@
+{
+  "schema_version": "1.0",
+  "server": {
+    "name": "ecommerce-unified-mcp",
+    "version": "1.2.0",
+    "description": "Unified E-Commerce & Logistics MCP Server connecting REST APIs, GraphQL, Python Plugins, and Mock microservices.",
+    "instructions": "Use this MCP server to look up customer profiles, inspect orders, check warehouse inventory, query international country/currency data via GraphQL, calculate tiered enterprise quotes, and file customer support tickets.",
+    "require_api_key_env": "MCP_SERVER_API_KEY"
+  },
+  "backends": {
+    "customer_rest_api": {
+      "type": "rest",
+      "base_url": "${ORDER_SERVICE_BASE_URL:-https://jsonplaceholder.typicode.com}",
+      "timeout_seconds": 20.0,
+      "max_retries": 2,
+      "headers": {
+        "X-Client-Platform": "MCPFactory-CloudRun"
+      },
+      "auth": {
+        "type": "api_key",
+        "header_name": "X-API-Key",
+        "token": "${ORDER_SERVICE_API_KEY:-demo-api-key}"
+      }
+    },
+    "countries_graphql": {
+      "type": "graphql",
+      "base_url": "${GRAPHQL_COUNTRIES_URL:-https://countries.trevorblades.com/graphql}",
+      "timeout_seconds": 15.0,
+      "max_retries": 1,
+      "auth": {
+        "type": "none"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "get_customer_profile",
+      "description": "Fetches a customer's contact details and company information by their numeric user ID.",
+      "backend": "customer_rest_api",
+      "connector": "rest",
+      "method": "GET",
+      "endpoint": "/users/{user_id}",
+      "parameters": {
+        "user_id": {
+          "type": "integer",
+          "description": "Unique numeric customer ID (e.g., 1 through 10)",
+          "required": true,
+          "location": "path"
+        }
+      },
+      "response": {
+        "pick_fields": ["id", "name", "username", "email", "phone", "website", "company"]
+      }
+    },
+    {
+      "name": "list_customer_orders",
+      "description": "Retrieves recent orders/posts associated with a specific customer ID.",
+      "backend": "customer_rest_api",
+      "connector": "rest",
+      "method": "GET",
+      "endpoint": "/posts",
+      "parameters": {
+        "customer_id": {
+          "type": "integer",
+          "description": "Customer ID whose orders should be listed",
+          "required": true,
+          "location": "query",
+          "field_name": "userId"
+        }
+      },
+      "response": {
+        "max_items": 5,
+        "pick_fields": ["id", "userId", "title", "body"]
+      }
+    },
+    {
+      "name": "create_support_ticket",
+      "description": "Creates a new customer support ticket in the backend ticketing system.",
+      "backend": "customer_rest_api",
+      "connector": "rest",
+      "method": "POST",
+      "endpoint": "/posts",
+      "static_body": {
+        "source": "ai_agent_mcp"
+      },
+      "parameters": {
+        "customer_id": {
+          "type": "integer",
+          "description": "Customer ID opening the ticket",
+          "required": true,
+          "location": "body",
+          "field_name": "userId"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Short summary title of the support issue",
+          "required": true,
+          "location": "body",
+          "field_name": "title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed explanation of the customer's issue",
+          "required": true,
+          "location": "body",
+          "field_name": "body"
+        },
+        "priority": {
+          "type": "string",
+          "description": "Ticket urgency level",
+          "required": false,
+          "default": "normal",
+          "enum": ["low", "normal", "high", "critical"],
+          "location": "body"
+        }
+      }
+    },
+    {
+      "name": "lookup_country_shipping_info",
+      "description": "Queries the GraphQL Country Directory for currency, capital, and language details using a 2-letter ISO country code (e.g., 'US', 'IN', 'DE', 'JP').",
+      "backend": "countries_graphql",
+      "connector": "graphql",
+      "graphql_query": "query GetCountry($code: ID!) { country(code: $code) { code name native capital currency emoji languages { code name } } }",
+      "operation_name": "GetCountry",
+      "parameters": {
+        "code": {
+          "type": "string",
+          "description": "Two-letter uppercase ISO 3166-1 alpha-2 country code (e.g. 'US', 'IN', 'GB')",
+          "required": true
+        }
+      },
+      "response": {
+        "extract_path": "data.country"
+      }
+    },
+    {
+      "name": "calculate_enterprise_quote",
+      "description": "Calculates a B2B order price quote including tiered customer discounts, bulk volume discounts, and regional sales tax.",
+      "connector": "python",
+      "handler": "plugins.custom_handlers:calculate_order_quote",
+      "parameters": {
+        "unit_price": {
+          "type": "number",
+          "description": "Base price per unit in USD",
+          "required": true
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Number of units being ordered",
+          "required": true
+        },
+        "tier": {
+          "type": "string",
+          "description": "Customer partnership tier",
+          "required": false,
+          "default": "standard",
+          "enum": ["standard", "silver", "gold", "enterprise"]
+        },
+        "tax_rate_percent": {
+          "type": "number",
+          "description": "Applicable tax percentage (default: 8.25)",
+          "required": false,
+          "default": 8.25
+        }
+      }
+    },
+    {
+      "name": "check_warehouse_inventory",
+      "description": "Checks real-time stock availability and fulfillment SLA for a product SKU in a target warehouse region.",
+      "connector": "mock",
+      "parameters": {
+        "sku": {
+          "type": "string",
+          "description": "Product SKU identifier (e.g. 'GPU-H100-80G')",
+          "required": true
+        },
+        "warehouse_region": {
+          "type": "string",
+          "description": "Target fulfillment region",
+          "required": false,
+          "default": "us-central1",
+          "enum": ["us-central1", "europe-west1", "asia-south1"]
+        }
+      },
+      "mock_response": {
+        "sku": "{sku}",
+        "warehouse_region": "{warehouse_region}",
+        "in_stock": true,
+        "available_units": 42,
+        "estimated_dispatch_hours": 4,
+        "carrier": "GlobalExpress Air"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "uri": "config://ecommerce/shipping-policies",
+      "name": "Global Shipping & Return Policies",
+      "description": "Official SLA, customs, and return policy rules for AI support agents",
+      "mime_type": "application/json",
+      "static_content": {
+        "free_shipping_threshold_usd": 150.0,
+        "return_window_days": 30,
+        "expedited_regions": ["US", "CA", "EU", "IN", "SG", "JP"],
+        "enterprise_sla": "24/7 dedicated replacement within 4 business hours"
+      }
+    },
+    {
+      "uri": "diagnostics://runtime/status",
+      "name": "MCP Runtime Diagnostics",
+      "description": "Live runtime health and capability report generated by a Python plugin",
+      "mime_type": "application/json",
+      "handler": "plugins.custom_handlers:get_runtime_diagnostics"
+    },
+    {
+      "uri": "customers://profiles/{user_id}",
+      "name": "Dynamic Customer Profile Resource",
+      "description": "Live customer record fetched on-demand from the REST backend via URI template",
+      "mime_type": "application/json",
+      "backend": "customer_rest_api",
+      "endpoint": "/users/{user_id}",
+      "response": {
+        "pick_fields": ["id", "name", "email", "company"]
+      }
+    }
+  ],
+  "prompts": [
+    {
+      "name": "investigate_customer_issue",
+      "description": "Guided workflow to investigate a customer's profile, recent orders, and open a support ticket",
+      "arguments": [
+        {
+          "name": "customer_id",
+          "description": "Numeric customer ID",
+          "required": true
+        },
+        {
+          "name": "issue_summary",
+          "description": "Brief description of the reported problem",
+          "required": true
+        }
+      ],
+      "template": "Please investigate the issue reported by customer ID {customer_id}: '{issue_summary}'.\n1. Call `get_customer_profile` with user_id={customer_id}.\n2. Call `list_customer_orders` with customer_id={customer_id} to review their recent activity.\n3. Summarize your findings and offer to create a support ticket using `create_support_ticket`."
+    },
+    {
+      "name": "prepare_international_quote",
+      "description": "Generates an international B2B price quote with local currency context",
+      "arguments": [
+        {
+          "name": "country_code",
+          "description": "2-letter ISO country code (e.g. 'IN', 'DE', 'US')",
+          "required": true
+        },
+        {
+          "name": "sku",
+          "description": "Product SKU",
+          "required": true
+        },
+        {
+          "name": "quantity",
+          "description": "Number of units",
+          "required": true
+        },
+        {
+          "name": "unit_price",
+          "description": "Unit price in USD",
+          "required": true
+        }
+      ],
+      "template": "Prepare an international enterprise quote for {quantity} units of SKU '{sku}' (unit price: ${unit_price} USD) shipping to country '{country_code}':\n1. Check stock via `check_warehouse_inventory`.\n2. Look up destination country currency and details via `lookup_country_shipping_info` with code='{country_code}'.\n3. Calculate the final pricing breakdown via `calculate_enterprise_quote` with tier='enterprise'."
+    }
+  ]
+}

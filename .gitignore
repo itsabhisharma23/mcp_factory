@@ -1,0 +1,17 @@
+# Python virtual environment & bytecode
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Secrets & local env
+.env
+
+# OS files
+.DS_Store
