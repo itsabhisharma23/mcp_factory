@@ -27,6 +27,21 @@ class GraphQLConnector(BaseConnector):
             backend_config.auth,
             base_url=backend_config.base_url,
         )
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Returns a persistent, connection-pooled AsyncClient to reuse TCP/TLS connections."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=self.backend_config.timeout_seconds,
+                verify=self.backend_config.verify_ssl,
+                limits=httpx.Limits(
+                    max_connections=100,
+                    max_keepalive_connections=25,
+                    keepalive_expiry=60.0,
+                ),
+            )
+        return self._client
 
     async def execute(self, tool: ToolConfig, arguments: dict[str, Any]) -> Any:
         if not tool.graphql_query:
@@ -61,31 +76,28 @@ class GraphQLConnector(BaseConnector):
         query_params: dict[str, str] = {}
         headers, query_params = await self.authenticator.apply_auth(headers, query_params)
 
-        async with httpx.AsyncClient(
-            timeout=self.backend_config.timeout_seconds,
-            verify=self.backend_config.verify_ssl,
-        ) as client:
-            try:
-                response = await client.post(
-                    url,
-                    headers=headers,
-                    params=query_params,
-                    json=payload,
-                )
-                response.raise_for_status()
-                raw_data = response.json()
-            except httpx.HTTPStatusError as exc:
-                return {
-                    "error": True,
-                    "status_code": exc.response.status_code,
-                    "message": f"GraphQL HTTP {exc.response.status_code} from {url}",
-                    "details": exc.response.text[:1000],
-                }
-            except httpx.RequestError as exc:
-                return {
-                    "error": True,
-                    "message": f"GraphQL request error to {url}: {exc}",
-                }
+        client = self._get_client()
+        try:
+            response = await client.post(
+                url,
+                headers=headers,
+                params=query_params,
+                json=payload,
+            )
+            response.raise_for_status()
+            raw_data = response.json()
+        except httpx.HTTPStatusError as exc:
+            return {
+                "error": True,
+                "status_code": exc.response.status_code,
+                "message": f"GraphQL HTTP {exc.response.status_code} from {url}",
+                "details": exc.response.text[:1000],
+            }
+        except httpx.RequestError as exc:
+            return {
+                "error": True,
+                "message": f"GraphQL request error to {url}: {exc}",
+            }
 
         if isinstance(raw_data, dict) and "errors" in raw_data and not raw_data.get("data"):
             return {

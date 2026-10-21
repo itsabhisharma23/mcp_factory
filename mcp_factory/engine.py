@@ -119,13 +119,21 @@ class MCPFactoryEngine:
 
     async def execute_tool(self, name: str, arguments: Optional[dict[str, Any]] = None) -> Any:
         """Executes a configured MCP tool by name and returns the transformed response data."""
+        from mcp_factory.auth import redact_sensitive_data
+
         tool = self.tools_by_name.get(name)
         if not tool:
             raise KeyError(f"Unknown tool '{name}'. Available tools: {list(self.tools_by_name.keys())}")
 
         connector = self._get_connector_for_tool(tool)
         args = arguments or {}
-        logger.info("Executing tool '%s' via connector '%s' with args=%s", name, tool.connector, args)
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(
+                "Executing tool '%s' via connector '%s' with args=%s",
+                name,
+                tool.connector,
+                redact_sensitive_data(args),
+            )
         return await connector.execute(tool, args)
 
     async def read_resource_by_uri(self, uri: str) -> tuple[str, str]:

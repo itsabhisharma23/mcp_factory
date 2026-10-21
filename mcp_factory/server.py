@@ -35,20 +35,26 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount, Route
 
-from mcp_factory.auth import verify_inbound_api_key
+from mcp_factory.auth import current_request_headers, verify_inbound_request
 from mcp_factory.engine import MCPFactoryEngine
 
 logger = logging.getLogger("mcp_factory.server")
 
 
 def _check_auth(request: Request, engine: MCPFactoryEngine) -> Optional[JSONResponse]:
-    """Validates inbound API key if configured on the server."""
-    env_var = engine.config.server.require_api_key_env
-    ok, error_msg = verify_inbound_api_key(dict(request.headers), env_var_name=env_var)
+    """
+    Validates inbound authentication (API Keys, JWT HS256, or Google OIDC)
+    and populates `current_request_headers` ContextVar for Zero-Trust passthrough delegation.
+    """
+    lower_headers = {k.lower(): v for k, v in request.headers.items()}
+    current_request_headers.set(lower_headers)
+
+    ok, error_msg = verify_inbound_request(dict(request.headers), engine.config.server)
     if not ok:
         return JSONResponse(
             {"error": "Unauthorized", "message": error_msg},
             status_code=401,
+            headers={"WWW-Authenticate": "Bearer"},
         )
     return None
 

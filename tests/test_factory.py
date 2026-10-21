@@ -161,6 +161,86 @@ class TestMCPFactory(TestCase):
         tool_names = [t["name"] for t in blueprint_dict["tools"]]
         self.assertEqual(tool_names, ["list_invoices", "create_invoice", "refund_invoice"])
 
+    def test_security_and_auth_mechanisms(self) -> None:
+        import base64
+        import hashlib
+        import hmac
+        import time
+        from mcp_factory.auth import (
+            BackendAuthenticator,
+            current_request_headers,
+            redact_sensitive_data,
+            verify_inbound_api_key,
+            verify_jwt_hs256,
+        )
+        from mcp_factory.connectors.rest import RestConnector
+        from mcp_factory.schema import AuthType, BackendAuthConfig, BackendConfig
+
+        # 1. Multi-key rotatable inbound API key verification
+        os.environ["TEST_ROTATABLE_KEYS"] = "new_prod_key_v2, old_prod_key_v1"
+        ok1, _ = verify_inbound_api_key({"Authorization": "Bearer old_prod_key_v1"}, "TEST_ROTATABLE_KEYS")
+        ok2, _ = verify_inbound_api_key({"X-MCP-API-Key": "new_prod_key_v2"}, "TEST_ROTATABLE_KEYS")
+        ok3, _ = verify_inbound_api_key({"Authorization": "Bearer attacker_key"}, "TEST_ROTATABLE_KEYS")
+        self.assertTrue(ok1)
+        self.assertTrue(ok2)
+        self.assertFalse(ok3)
+
+        # 2. JWT HS256 verification (signature, exp, iss, aud, scopes)
+        secret = "super-secret-jwt-signing-key"
+        header_b64 = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).decode().rstrip("=")
+        claims = {
+            "sub": "agent-007",
+            "iss": "https://auth.acme.internal",
+            "aud": "mcp-factory-cloud-run",
+            "scope": "mcp:tools mcp:resources",
+            "exp": int(time.time()) + 600,
+        }
+        payload_b64 = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode().rstrip("=")
+        sig = hmac.new(secret.encode(), f"{header_b64}.{payload_b64}".encode(), hashlib.sha256).digest()
+        sig_b64 = base64.urlsafe_b64encode(sig).decode().rstrip("=")
+        jwt_token = f"{header_b64}.{payload_b64}.{sig_b64}"
+
+        valid_jwt, err_msg, parsed_claims = verify_jwt_hs256(
+            jwt_token,
+            secret=secret,
+            expected_issuer="https://auth.acme.internal",
+            expected_audience="mcp-factory-cloud-run",
+            required_scopes=["mcp:tools"],
+        )
+        self.assertTrue(valid_jwt, err_msg)
+        self.assertEqual(parsed_claims["sub"], "agent-007")
+
+        # Missing required scope should fail
+        invalid_scope, _, _ = verify_jwt_hs256(jwt_token, secret=secret, required_scopes=["mcp:admin"])
+        self.assertFalse(invalid_scope)
+
+        # 3. Outbound HMAC-SHA256 Request Signing
+        hmac_auth = BackendAuthenticator(
+            BackendAuthConfig(type=AuthType.HMAC_SHA256, hmac_secret="webhook-secret", header_name="X-Signature")
+        )
+        h_out, _ = asyncio.run(hmac_auth.apply_auth({}, {}, body_bytes=b'{"amount":100}'))
+        self.assertIn("X-Timestamp", h_out)
+        self.assertTrue(h_out["X-Signature"].startswith("sha256="))
+
+        # 4. Outbound Zero-Trust Passthrough Token Delegation
+        current_request_headers.set({"authorization": "Bearer user_delegated_oauth_token_xyz"})
+        pass_auth = BackendAuthenticator(
+            BackendAuthConfig(type=AuthType.PASSTHROUGH, source_header="Authorization", target_header="Authorization")
+        )
+        p_headers, _ = asyncio.run(pass_auth.apply_auth({}, {}))
+        self.assertEqual(p_headers["Authorization"], "Bearer user_delegated_oauth_token_xyz")
+
+        # 5. Path Traversal Protection in RestConnector
+        rest_conn = RestConnector(BackendConfig(base_url="https://api.example.com"))
+        with self.assertRaises(ValueError):
+            rest_conn._build_url("/users/{user_id}", {"user_id": "../../admin/secrets"})
+
+        # 6. Sensitive Data Redaction
+        redacted = redact_sensitive_data({"user": "alice", "api_key": "sk-12345", "nested": {"password": "pw"}})
+        self.assertEqual(redacted["api_key"], "***REDACTED***")
+        self.assertEqual(redacted["nested"]["password"], "***REDACTED***")
+        self.assertEqual(redacted["user"], "alice")
+
 
 if __name__ == "__main__":
     import unittest

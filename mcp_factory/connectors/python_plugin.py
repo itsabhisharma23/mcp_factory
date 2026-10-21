@@ -8,6 +8,7 @@ Ideal for database queries (BigQuery, Postgres, Redis), complex aggregations, or
 
 from __future__ import annotations
 
+from functools import lru_cache
 import importlib
 import inspect
 from typing import Any, Callable
@@ -17,6 +18,7 @@ from mcp_factory.schema import ToolConfig
 from mcp_factory.transformer import apply_response_transform
 
 
+@lru_cache(maxsize=256)
 def load_python_handler(handler_path: str) -> Callable[..., Any]:
     """
     Dynamically imports and returns a callable from 'module.submodule:function_name'.

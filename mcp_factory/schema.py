@@ -51,32 +51,62 @@ class AuthType(str, Enum):
     API_KEY = "api_key"
     BEARER = "bearer"
     BASIC = "basic"
+    CUSTOM_HEADERS = "custom_headers"
     OAUTH2_CLIENT_CREDENTIALS = "oauth2_client_credentials"
+    OAUTH2_REFRESH_TOKEN = "oauth2_refresh_token"
     GCP_ID_TOKEN = "gcp_id_token"
     GCP_ACCESS_TOKEN = "gcp_access_token"
+    HMAC_SHA256 = "hmac_sha256"
+    PASSTHROUGH = "passthrough"
 
 
 class BackendAuthConfig(BaseModel):
     """Authentication configuration for an outbound backend service."""
 
-    type: AuthType = Field(default=AuthType.NONE, description="Authentication strategy")
+    type: AuthType = Field(default=AuthType.NONE, description="Outbound authentication strategy")
     # For API_KEY
-    header_name: str = Field(default="X-API-Key", description="Header name for API key auth")
+    header_name: str = Field(default="X-API-Key", description="Header name for API key or HMAC signature")
     query_param: Optional[str] = Field(default=None, description="Query param name if API key is passed in URL")
     # For API_KEY or BEARER
     token: Optional[str] = Field(default=None, description="Static token/key or ${ENV_VAR}")
     # For BASIC
     username: Optional[str] = Field(default=None, description="Basic auth username")
     password: Optional[str] = Field(default=None, description="Basic auth password")
-    # For OAUTH2_CLIENT_CREDENTIALS
+    # For CUSTOM_HEADERS (e.g. Cloudflare X-Auth-Email + X-Auth-Key, Datadog DD-API-KEY + DD-APPLICATION-KEY)
+    custom_headers: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of multiple custom authentication headers to inject",
+    )
+    # For OAUTH2_CLIENT_CREDENTIALS & OAUTH2_REFRESH_TOKEN
     token_url: Optional[str] = Field(default=None, description="OAuth2 token endpoint URL")
     client_id: Optional[str] = Field(default=None, description="OAuth2 client ID")
     client_secret: Optional[str] = Field(default=None, description="OAuth2 client secret")
+    refresh_token: Optional[str] = Field(default=None, description="OAuth2 refresh token for oauth2_refresh_token flow")
     scopes: list[str] = Field(default_factory=list, description="OAuth2 requested scopes")
+    client_auth_method: Literal["client_secret_post", "client_secret_basic"] = Field(
+        default="client_secret_post",
+        description="How OAuth2 client credentials are sent to token_url (form body vs Basic Auth header)",
+    )
+    extra_token_params: dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional extra form parameters for OAuth2 token requests (e.g. 'audience' or 'resource')",
+    )
     # For GCP_ID_TOKEN (Cloud Run to Cloud Run service-to-service auth)
     audience: Optional[str] = Field(
         default=None,
         description="Target audience URL for GCP OIDC ID token (defaults to backend base_url)",
+    )
+    # For HMAC_SHA256 request signing
+    hmac_secret: Optional[str] = Field(default=None, description="Shared secret for HMAC-SHA256 signature")
+    timestamp_header: str = Field(default="X-Timestamp", description="Header carrying Unix timestamp for HMAC")
+    # For PASSTHROUGH (Zero-Trust User Token Delegation)
+    source_header: str = Field(
+        default="Authorization",
+        description="Inbound client header to extract and forward to the backend in passthrough mode",
+    )
+    target_header: str = Field(
+        default="Authorization",
+        description="Outbound backend header name to receive the passthrough token",
     )
 
 
@@ -98,6 +128,9 @@ class BackendConfig(BaseModel):
     timeout_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     max_retries: int = Field(default=2, ge=0, le=10)
     verify_ssl: bool = Field(default=True)
+    follow_redirects: bool = Field(default=False, description="Disable unexpected redirects by default for SSRF safety")
+    client_cert_path: Optional[str] = Field(default=None, description="Optional path to mTLS client certificate PEM")
+    client_key_path: Optional[str] = Field(default=None, description="Optional path to mTLS client private key PEM")
     auth: BackendAuthConfig = Field(default_factory=BackendAuthConfig)
 
 
@@ -303,6 +336,31 @@ class PromptConfig(BaseModel):
     role: Literal["user", "assistant"] = Field(default="user")
 
 
+class InboundAuthConfig(BaseModel):
+    """Inbound security configuration protecting the MCP Server endpoints."""
+
+    type: Literal["api_key", "jwt_hs256", "google_oidc", "none"] = Field(
+        default="api_key",
+        description="Inbound client authentication mechanism",
+    )
+    # For API_KEY (supports single key or comma-separated rotatable keys)
+    api_key_env: str = Field(default="MCP_SERVER_API_KEY")
+    # For JWT_HS256
+    jwt_secret_env: str = Field(default="MCP_JWT_SECRET")
+    issuer: Optional[str] = Field(default=None, description="Expected 'iss' claim in JWT")
+    audience: Optional[str] = Field(default=None, description="Expected 'aud' claim in JWT / Google OIDC token")
+    required_scopes: list[str] = Field(default_factory=list, description="Required scopes in JWT 'scope' or 'scp'")
+    # For GOOGLE_OIDC
+    allowed_emails: list[str] = Field(
+        default_factory=list,
+        description="Optional whitelist of caller email addresses or service accounts",
+    )
+    allowed_domains: list[str] = Field(
+        default_factory=list,
+        description="Optional whitelist of Google Workspace domains (e.g. ['acme.com'])",
+    )
+
+
 class ServerMetadataConfig(BaseModel):
     """Top-level MCP Server metadata and security settings."""
 
@@ -316,9 +374,13 @@ class ServerMetadataConfig(BaseModel):
     require_api_key_env: Optional[str] = Field(
         default="MCP_SERVER_API_KEY",
         description=(
-            "Name of the environment variable holding an inbound API key to protect HTTP/SSE endpoints. "
+            "Name of the environment variable holding an inbound API key (or comma-separated keys) to protect HTTP/SSE endpoints. "
             "If the env var is non-empty at runtime, requests must supply it via Authorization: Bearer or X-MCP-API-Key."
         ),
+    )
+    inbound_auth: Optional[InboundAuthConfig] = Field(
+        default=None,
+        description="Optional advanced inbound authentication configuration (API Keys, JWT HS256, or Google OIDC)",
     )
 
 

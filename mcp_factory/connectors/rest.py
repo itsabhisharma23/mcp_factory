@@ -39,15 +39,49 @@ class RestConnector(BaseConnector):
             backend_config.auth,
             base_url=backend_config.base_url,
         )
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Returns a persistent, connection-pooled AsyncClient to reuse TCP/TLS connections."""
+        if self._client is None or self._client.is_closed:
+            cert: Any = None
+            if self.backend_config.client_cert_path and self.backend_config.client_key_path:
+                cert = (self.backend_config.client_cert_path, self.backend_config.client_key_path)
+            elif self.backend_config.client_cert_path:
+                cert = self.backend_config.client_cert_path
+
+            self._client = httpx.AsyncClient(
+                timeout=self.backend_config.timeout_seconds,
+                verify=self.backend_config.verify_ssl,
+                follow_redirects=self.backend_config.follow_redirects,
+                cert=cert,
+                limits=httpx.Limits(
+                    max_connections=100,
+                    max_keepalive_connections=25,
+                    keepalive_expiry=60.0,
+                ),
+            )
+        return self._client
+
+    async def aclose(self) -> None:
+        """Closes the underlying HTTP connection pool on shutdown."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
 
     def _build_url(self, endpoint: str, path_params: dict[str, Any]) -> str:
-        """Interpolates `{param}` placeholders in the endpoint and joins with `base_url`."""
+        """
+        Interpolates `{param}` placeholders in the endpoint and joins with `base_url`.
+        Enforces path traversal and null-byte sanitization on all path parameters.
+        """
         resolved_endpoint = endpoint
         for key, val in path_params.items():
+            str_val = str(val)
+            if "\x00" in str_val or str_val in (".", "..") or "../" in str_val or "..\\" in str_val:
+                raise ValueError(f"Unsafe path parameter value rejected for '{key}'.")
             placeholder = f"{{{key}}}"
             if placeholder in resolved_endpoint:
                 resolved_endpoint = resolved_endpoint.replace(
-                    placeholder, quote(str(val), safe="")
+                    placeholder, quote(str_val, safe="")
                 )
 
         if resolved_endpoint.startswith(("http://", "https://")):
@@ -104,6 +138,8 @@ class RestConnector(BaseConnector):
         return path_params, query_params, body_params, header_params
 
     async def execute(self, tool: ToolConfig, arguments: dict[str, Any]) -> Any:
+        import json as _json
+
         path_params, query_params, body_params, arg_headers = self._route_arguments(tool, arguments)
         url = self._build_url(tool.endpoint, path_params)
 
@@ -115,59 +151,62 @@ class RestConnector(BaseConnector):
             **arg_headers,
         }
 
-        # Apply outbound authentication
+        body_bytes: bytes | None = None
+        if tool.method in ("POST", "PUT", "PATCH") and body_params:
+            body_bytes = _json.dumps(body_params, separators=(",", ":")).encode("utf-8")
+            headers.setdefault("Content-Type", "application/json")
+
+        # Apply outbound authentication (including HMAC body signature or passthrough token)
         str_query = {k: str(v) if not isinstance(v, list) else v for k, v in query_params.items()}
-        headers, str_query = await self.authenticator.apply_auth(headers, str_query)
+        headers, str_query = await self.authenticator.apply_auth(
+            headers, str_query, body_bytes=body_bytes
+        )
 
         max_attempts = max(1, self.backend_config.max_retries + 1)
         last_error: Exception | None = None
+        client = self._get_client()
 
-        async with httpx.AsyncClient(
-            timeout=self.backend_config.timeout_seconds,
-            verify=self.backend_config.verify_ssl,
-            follow_redirects=True,
-        ) as client:
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    request_kwargs: dict[str, Any] = {
-                        "method": tool.method,
-                        "url": url,
-                        "headers": headers,
-                        "params": str_query,
-                    }
-                    if tool.method in ("POST", "PUT", "PATCH") and body_params:
-                        request_kwargs["json"] = body_params
+        for attempt in range(1, max_attempts + 1):
+            try:
+                request_kwargs: dict[str, Any] = {
+                    "method": tool.method,
+                    "url": url,
+                    "headers": headers,
+                    "params": str_query,
+                }
+                if body_bytes is not None:
+                    request_kwargs["content"] = body_bytes
 
-                    response = await client.request(**request_kwargs)
+                response = await client.request(**request_kwargs)
 
-                    # Retry on transient 502/503/504
-                    if response.status_code in (502, 503, 504) and attempt < max_attempts:
-                        await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
-                        continue
+                # Retry on transient 502/503/504
+                if response.status_code in (502, 503, 504) and attempt < max_attempts:
+                    await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
+                    continue
 
-                    response.raise_for_status()
+                response.raise_for_status()
 
-                    content_type = response.headers.get("content-type", "")
-                    if "application/json" in content_type or response.text.strip().startswith(("{", "[")):
-                        raw_data = response.json()
-                    else:
-                        raw_data = response.text
+                content_type = response.headers.get("content-type", "")
+                if "application/json" in content_type or response.text.strip().startswith(("{", "[")):
+                    raw_data = response.json()
+                else:
+                    raw_data = response.text
 
-                    return apply_response_transform(raw_data, tool.response)
+                return apply_response_transform(raw_data, tool.response)
 
-                except httpx.HTTPStatusError as exc:
-                    error_body = exc.response.text[:1000]
-                    return {
-                        "error": True,
-                        "status_code": exc.response.status_code,
-                        "message": f"HTTP {exc.response.status_code} from {tool.method} {url}",
-                        "details": error_body,
-                    }
-                except (httpx.RequestError, httpx.TimeoutException) as exc:
-                    last_error = exc
-                    if attempt < max_attempts:
-                        await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
-                        continue
+            except httpx.HTTPStatusError as exc:
+                error_body = exc.response.text[:1000]
+                return {
+                    "error": True,
+                    "status_code": exc.response.status_code,
+                    "message": f"HTTP {exc.response.status_code} from {tool.method} {url}",
+                    "details": error_body,
+                }
+            except (httpx.RequestError, httpx.TimeoutException) as exc:
+                last_error = exc
+                if attempt < max_attempts:
+                    await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
+                    continue
 
         return {
             "error": True,

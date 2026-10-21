@@ -240,17 +240,26 @@ Anywhere in your JSON file, you can reference environment variables with optiona
 
 ### 2. Defining Backends & Authentication (`backends`)
 
-MCPFactory supports **7 outbound authentication modes** out of the box:
+MCPFactory supports **11 outbound authentication modes** and **mTLS client certificates** out of the box:
 
 | Auth `type` | Description | Key Fields |
 | :--- | :--- | :--- |
-| `none` | No authentication | — |
-| `api_key` | Injects API key into header or query param | `header_name` (or `query_param`), `token` |
+| `none` | Public / unauthenticated endpoint | — |
+| `api_key` | Injects API key into custom header or URL query param | `header_name` (or `query_param`), `token` |
 | `bearer` | Injects `Authorization: Bearer <token>` | `token` |
-| `basic` | HTTP Basic Auth (`base64(user:pass)`) | `username`, `password` |
-| `oauth2_client_credentials` | Fetches & caches OAuth2 token automatically | `token_url`, `client_id`, `client_secret`, `scopes` |
-| `gcp_id_token` | Google Cloud OIDC ID token (Cloud Run $\rightarrow$ Cloud Run) | `audience` (target Cloud Run URL) |
+| `basic` | HTTP Basic Auth (`base64(username:password)`) | `username`, `password` |
+| `custom_headers` | Multi-header auth (e.g., Datadog, Cloudflare, Algolia) | `custom_headers` (`{"DD-API-KEY": "...", "DD-APP-KEY": "..."}`) |
+| `oauth2_client_credentials` | OAuth2 M2M flow (`client_secret_post` or `client_secret_basic`) with `asyncio.Lock` caching | `token_url`, `client_id`, `client_secret`, `scopes`, `client_auth_method`, `extra_token_params` |
+| `oauth2_refresh_token` | OAuth2 user-delegated `refresh_token` exchange & automatic refresh token rotation | `token_url`, `client_id`, `client_secret`, `refresh_token`, `scopes` |
+| `gcp_id_token` | Google Cloud OIDC ID token (Cloud Run $\rightarrow$ private Cloud Run service-to-service) | `audience` (target Cloud Run URL) |
 | `gcp_access_token` | Google Cloud IAM token via ADC (BigQuery, Vertex AI, GCS) | `scopes` |
+| `hmac_sha256` | Cryptographic `HMAC-SHA256(timestamp.body)` payload signing | `hmac_secret`, `header_name` (`X-Signature`), `timestamp_header` (`X-Timestamp`) |
+| `passthrough` | **Zero-Trust User Delegation**: forwards the caller's own inbound token to the backend | `source_header` (`Authorization`), `target_header` (`Authorization`) |
+
+Plus **Inbound MCP Server Authentication** (`server.inbound_auth` in JSON):
+* **`api_key`**: Supports single or comma-separated rotatable keys in `MCP_SERVER_API_KEY` (`new_key_v2,old_key_v1`) with constant-time `hmac.compare_digest`.
+* **`jwt_hs256`**: Built-in RFC 7519 JWT verifier validating signature (`MCP_JWT_SECRET`), `exp`, `nbf`, `issuer`, `audience`, and `required_scopes`.
+* **`google_oidc`**: Verifies Google-signed RS256 OIDC ID tokens with `audience`, `allowed_emails`, and `allowed_domains`.
 
 ### 3. Defining Tools (`tools`)
 
