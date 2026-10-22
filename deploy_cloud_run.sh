@@ -33,8 +33,13 @@ fi
 
 # 2. Validate Blueprint Locally Before Deploying
 echo "🔍 Validating MCP blueprint: ${MCP_CONFIG_PATH} ..."
-if command -v python3 &>/dev/null; then
-  python3 -m mcp_factory.cli validate "${MCP_CONFIG_PATH}"
+if [[ -x ".venv/bin/python" ]]; then
+  PYTHONPATH="." .venv/bin/python -m mcp_factory.cli validate "${MCP_CONFIG_PATH}"
+elif python3 -c "import pydantic" &>/dev/null; then
+  PYTHONPATH="." python3 -m mcp_factory.cli validate "${MCP_CONFIG_PATH}"
+else
+  python3 -m json.tool "${MCP_CONFIG_PATH}" >/dev/null
+  echo "✅ JSON syntax valid (full schema validation will run inside Cloud Build container)."
 fi
 
 # Extract default service name from JSON blueprint if SERVICE_NAME not explicitly provided
@@ -117,3 +122,4 @@ echo "curl -s -X POST ${SERVICE_URL}/mcp \\"
 echo "  -H 'Content-Type: application/json' \\"
 echo "  -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | jq ."
 echo "============================================================================"
+

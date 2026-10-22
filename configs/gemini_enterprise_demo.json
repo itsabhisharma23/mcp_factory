@@ -3,13 +3,10 @@
   "server": {
     "name": "gemini-enterprise-demo-mcp",
     "version": "1.0.0",
-    "description": "Dummy Enterprise IT & Operations MCP Server protected by Google Identity (OIDC) for Gemini Enterprise / Vertex AI Agent Builder.",
+    "description": "Public Demo Enterprise IT & Operations MCP Server for Gemini Enterprise / Vertex AI Agent Builder.",
     "instructions": "Use these tools to look up employee directory details, check IT service desk ticket statuses, create new IT support tickets, and calculate cloud hardware budget quotes.",
     "inbound_auth": {
-      "type": "google_oidc",
-      "audience": "${GOOGLE_OIDC_AUDIENCE:-}",
-      "allowed_emails": [],
-      "allowed_domains": []
+      "type": "none"
     }
   },
   "backends": {},
