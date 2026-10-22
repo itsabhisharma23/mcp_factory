@@ -464,10 +464,11 @@ def verify_inbound_request(
             import google.oauth2.id_token
 
             auth_req = google.auth.transport.requests.Request()
+            effective_audience = inbound_cfg.audience.strip() if inbound_cfg.audience else None
             claims = google.oauth2.id_token.verify_oauth2_token(
                 bearer_token,
                 auth_req,
-                audience=inbound_cfg.audience,
+                audience=effective_audience or None,
             )
             email = claims.get("email", "")
             if inbound_cfg.allowed_emails and email not in inbound_cfg.allowed_emails:

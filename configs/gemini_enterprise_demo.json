@@ -1,0 +1,154 @@
+{
+  "schema_version": "1.0",
+  "server": {
+    "name": "gemini-enterprise-demo-mcp",
+    "version": "1.0.0",
+    "description": "Dummy Enterprise IT & Operations MCP Server protected by Google Identity (OIDC) for Gemini Enterprise / Vertex AI Agent Builder.",
+    "instructions": "Use these tools to look up employee directory details, check IT service desk ticket statuses, create new IT support tickets, and calculate cloud hardware budget quotes.",
+    "inbound_auth": {
+      "type": "google_oidc",
+      "audience": "${GOOGLE_OIDC_AUDIENCE:-}",
+      "allowed_emails": [],
+      "allowed_domains": []
+    }
+  },
+  "backends": {},
+  "tools": [
+    {
+      "name": "lookup_employee_directory",
+      "description": "Looks up an employee's department, title, manager, location, and cost center by email or name.",
+      "connector": "mock",
+      "parameters": {
+        "employee_query": {
+          "type": "string",
+          "description": "Employee email address or full name (e.g. 'alex@company.com' or 'Alex Rivera')",
+          "required": true
+        }
+      },
+      "mock_response": {
+        "query": "{employee_query}",
+        "status": "active",
+        "department": "Cloud Platform Engineering",
+        "title": "Staff AI Solutions Architect",
+        "manager": "Priya Nair (VP of Engineering)",
+        "cost_center": "CC-4092-AI",
+        "office_location": "Bengaluru / Hybrid",
+        "clearance_tier": "L3-Enterprise"
+      }
+    },
+    {
+      "name": "check_it_ticket_status",
+      "description": "Checks the real-time status, assigned engineer, and resolution SLA of an IT Service Desk ticket.",
+      "connector": "mock",
+      "parameters": {
+        "ticket_id": {
+          "type": "string",
+          "description": "IT Ticket ID (e.g. 'INC-1042' or 'REQ-9001')",
+          "required": true
+        }
+      },
+      "mock_response": {
+        "ticket_id": "{ticket_id}",
+        "status": "In Progress",
+        "priority": "P2 - High",
+        "assigned_group": "Cloud IAM & Security Ops",
+        "assigned_engineer": "devsecops-oncall@company.com",
+        "estimated_resolution": "Within 2 hours",
+        "last_note": "Verified Google Cloud IAM invoker permissions; provisioning access group."
+      }
+    },
+    {
+      "name": "create_it_support_ticket",
+      "description": "Creates a new internal IT support ticket for access requests, software provisioning, or incident reporting.",
+      "connector": "mock",
+      "parameters": {
+        "requester_email": {
+          "type": "string",
+          "description": "Email address of the employee requesting support",
+          "required": true
+        },
+        "category": {
+          "type": "string",
+          "description": "Support request category",
+          "required": true,
+          "enum": ["gcp_iam_access", "hardware_request", "software_license", "vpn_network_issue"]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Brief summary of the request or issue",
+          "required": true
+        },
+        "urgency": {
+          "type": "string",
+          "description": "Urgency level",
+          "required": false,
+          "default": "medium",
+          "enum": ["low", "medium", "high", "critical"]
+        }
+      },
+      "mock_response": {
+        "created": true,
+        "ticket_id": "INC-88421",
+        "requester_email": "{requester_email}",
+        "category": "{category}",
+        "summary": "{summary}",
+        "urgency": "{urgency}",
+        "status": "Assigned to IT Triage Queue",
+        "sla_response_minutes": 30
+      }
+    },
+    {
+      "name": "calculate_cloud_budget_quote",
+      "description": "Calculates an internal budget quote for cloud compute reservations with volume discounts and tax.",
+      "connector": "python",
+      "handler": "plugins.custom_handlers:calculate_order_quote",
+      "parameters": {
+        "unit_price": {
+          "type": "number",
+          "description": "Monthly cost per GPU/TPU node in USD",
+          "required": true
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Number of nodes requested",
+          "required": true
+        },
+        "tier": {
+          "type": "string",
+          "description": "Internal commitment tier",
+          "required": false,
+          "default": "enterprise",
+          "enum": ["standard", "silver", "gold", "enterprise"]
+        }
+      }
+    }
+  ],
+  "resources": [
+    {
+      "uri": "enterprise://policies/it-security-guidelines",
+      "name": "Enterprise IT & Cloud Security Guidelines",
+      "description": "Standard operating policy for GCP IAM, OIDC authentication, and ticket escalation.",
+      "mime_type": "application/json",
+      "static_content": {
+        "auth_standard": "Google Cloud OIDC + Cloud Run IAM Invoker",
+        "p1_sla_minutes": 15,
+        "p2_sla_minutes": 120,
+        "approver_role": "roles/run.invoker"
+      }
+    }
+  ],
+  "prompts": [
+    {
+      "name": "onboard_new_engineer",
+      "description": "Workflow to look up an employee and file their GCP IAM access ticket",
+      "arguments": [
+        {
+          "name": "employee_email",
+          "description": "Email of the engineer being onboarded",
+          "required": true
+        }
+      ],
+      "template": "Please look up '{employee_email}' using `lookup_employee_directory`, and then create a `gcp_iam_access` support ticket for them using `create_it_support_ticket` referencing their department and cost center."
+    }
+  ]
+}
